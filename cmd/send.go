@@ -5,15 +5,15 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/aliirz/phantm-cli/internal/api"
-	"github.com/aliirz/phantm-cli/internal/crypto"
-	"github.com/aliirz/phantm-cli/internal/ui"
+	"github.com/aliirz/phntm-cli/internal/api"
+	"github.com/aliirz/phntm-cli/internal/crypto"
+	"github.com/aliirz/phntm-cli/internal/ui"
 )
 
 func runSend(args []string) {
 	if len(args) == 0 {
 		ui.Error("NO_FILE_SPECIFIED")
-		fmt.Fprintf(os.Stderr, "Usage: phantm send <file> [--expiry 1h|6h|24h]\n")
+		fmt.Fprintf(os.Stderr, "Usage: phntm send <file> [--expiry 1h|6h|24h]\n")
 		os.Exit(1)
 	}
 
@@ -68,7 +68,7 @@ func runSend(args []string) {
 
 	// Init upload
 	ui.Progress("INITIATING_TRANSMISSION...")
-	baseURL := os.Getenv("PHANTM_API_URL")
+	baseURL := os.Getenv("PHNTM_API_URL")
 	client := api.New(baseURL)
 
 	initResp, err := client.InitUpload(fileName, fileSize, expiryHours)

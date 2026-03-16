@@ -7,15 +7,15 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/aliirz/phantm-cli/internal/api"
-	"github.com/aliirz/phantm-cli/internal/crypto"
-	"github.com/aliirz/phantm-cli/internal/ui"
+	"github.com/aliirz/phntm-cli/internal/api"
+	"github.com/aliirz/phntm-cli/internal/crypto"
+	"github.com/aliirz/phntm-cli/internal/ui"
 )
 
 func runGet(args []string) {
 	if len(args) == 0 {
 		ui.Error("NO_URL_SPECIFIED")
-		fmt.Fprintf(os.Stderr, "Usage: phantm get <url>\n")
+		fmt.Fprintf(os.Stderr, "Usage: phntm get <url>\n")
 		os.Exit(1)
 	}
 
@@ -45,7 +45,7 @@ func runGet(args []string) {
 
 	// Determine API base URL from the share URL
 	baseURL := fmt.Sprintf("%s://%s", parsed.Scheme, parsed.Host)
-	envURL := os.Getenv("PHANTM_API_URL")
+	envURL := os.Getenv("PHNTM_API_URL")
 	if envURL != "" {
 		baseURL = envURL
 	}
