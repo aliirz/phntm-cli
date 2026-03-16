@@ -1,0 +1,36 @@
+version: 2
+
+project_name: phntm
+
+builds:
+  - main: .
+    binary: phntm
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X github.com/aliirz/phntm-cli/cmd.version={{.Version}}
+
+archives:
+  - format: tar.gz
+    name_template: "phntm_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        format: zip
+
+checksum:
+  name_template: "checksums.txt"
+
+changelog:
+  sort: asc
+
+release:
+  github:
+    owner: aliirz
+    name: phntm-cli
