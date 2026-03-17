@@ -4,11 +4,13 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/aliirz/phntm-cli/internal/ui"
+	"github.com/aliirz/phntm-cli/internal/updater"
 )
 
-const version = "0.1.0"
+var version = "0.1.0"
 
 func Execute() {
 	if len(os.Args) < 2 {
@@ -18,11 +20,20 @@ func Execute() {
 
 	command := os.Args[1]
 
+	// Background update check for non-update commands
+	if command != "update" && command != "version" && command != "--version" {
+		updater.CheckForUpdateQuietly(version)
+		// Give the goroutine a moment to print if cached
+		time.Sleep(10 * time.Millisecond)
+	}
+
 	switch command {
 	case "send":
 		runSend(os.Args[2:])
 	case "get":
 		runGet(os.Args[2:])
+	case "update":
+		updater.RunUpdate(version)
 	case "version", "--version", "-v":
 		fmt.Printf("phntm %s\n", version)
 	case "help", "--help", "-h":
@@ -44,6 +55,7 @@ func printUsage() {
 	fmt.Fprintf(os.Stderr, `%sUSAGE:%s
   phntm send <file> [--expiry 1h|6h|24h]    Encrypt & upload a file
   phntm get <url>                            Download & decrypt a file
+  phntm update                               Check for updates and self-update
   phntm <file>                               Shorthand for send
   phntm version                              Print version
 

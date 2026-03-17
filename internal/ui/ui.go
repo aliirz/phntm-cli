@@ -76,6 +76,14 @@ func Banner() {
 `, cyan, reset, muted, reset)
 }
 
+// UpdateHint prints a subtle update notification.
+func UpdateHint(latest string) {
+	if IsPiped() {
+		return
+	}
+	fmt.Fprintf(os.Stderr, "%sUPDATE_AVAILABLE: %s — run 'phntm update' to install%s\n", muted, latest, reset)
+}
+
 // FileInfo prints file metadata.
 func FileInfo(name string, size string, expiry string) {
 	if IsPiped() {
