@@ -65,5 +65,8 @@ func printUsage() {
   phntm get https://phntm.sh/f/abc123#key    Download & decrypt
   phntm report.pdf | pbcopy                  Upload & copy link to clipboard
 
-`, "\033[38;2;0;255;209m", "\033[0m", "\033[38;2;0;255;209m", "\033[0m")
+%sCONTACT:%s
+  %sali@aliirz.com                              https://phntm.sh%s
+
+`, "\033[38;2;0;255;209m", "\033[0m", "\033[38;2;0;255;209m", "\033[0m", "\033[38;2;0;255;209m", "\033[0m", "\033[38;2;85;85;85m", "\033[0m")
 }
