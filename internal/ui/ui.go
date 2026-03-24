@@ -59,21 +59,38 @@ func URL(url string) {
 	}
 }
 
-// Banner prints the PHNTM branding.
+// Banner prints the PHNTM branding with a vertical gradient.
+// The gradient shifts from bright cyan (#00FFD1) at the top to a deeper
+// teal (#00B8A9) at the bottom. Each line gets its own RGB color via
+// 24-bit ANSI escape: \033[38;2;R;G;Bm
+// This only works on terminals that support "truecolor" (most modern ones do).
 func Banner() {
 	if IsPiped() {
 		return
 	}
-	fmt.Fprintf(os.Stderr, `%s
-  ██████╗ ██╗  ██╗███╗   ██╗████████╗███╗   ███╗
-  ██╔══██╗██║  ██║████╗  ██║╚══██╔══╝████╗ ████║
-  ██████╔╝███████║██╔██╗ ██║   ██║   ██╔████╔██║
-  ██╔═══╝ ██╔══██║██║╚██╗██║   ██║   ██║╚██╔╝██║
-  ██║     ██║  ██║██║ ╚████║   ██║   ██║ ╚═╝ ██║
-  ╚═╝     ╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝   ╚═╝     ╚═╝
-%s%s  encrypted file sharing that self-destructs%s
 
-`, cyan, reset, muted, reset)
+	lines := []string{
+		"  ██████╗ ██╗  ██╗███╗   ██╗████████╗███╗   ███╗",
+		"  ██╔══██╗██║  ██║████╗  ██║╚══██╔══╝████╗ ████║",
+		"  ██████╔╝███████║██╔██╗ ██║   ██║   ██╔████╔██║",
+		"  ██╔═══╝ ██╔══██║██║╚██╗██║   ██║   ██║╚██╔╝██║",
+		"  ██║     ██║  ██║██║ ╚████║   ██║   ██║ ╚═╝ ██║",
+		"  ╚═╝     ╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝   ╚═╝     ╚═╝",
+	}
+
+	// Gradient: top is R=0, G=255, B=209 (#00FFD1)
+	//           bot is R=0, G=184, B=169 (#00B8A9)
+	// We interpolate G and B across the lines. R stays 0.
+	fmt.Fprintln(os.Stderr)
+	for i, line := range lines {
+		// t goes from 0.0 (first line) to 1.0 (last line)
+		t := float64(i) / float64(len(lines)-1)
+		g := int(255 - t*71)  // 255 → 184
+		b := int(209 - t*40)  // 209 → 169
+		color := fmt.Sprintf("\033[38;2;0;%d;%dm", g, b)
+		fmt.Fprintf(os.Stderr, "%s%s%s\n", color, line, reset)
+	}
+	fmt.Fprintf(os.Stderr, "%s  encrypted file sharing that self-destructs%s\n\n", muted, reset)
 }
 
 // UpdateHint prints a subtle update notification.

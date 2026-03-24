@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -37,8 +38,17 @@ func runSend(args []string) {
 		}
 	}
 
-	// Read file
-	ui.Status("READING_FILE...")
+	// Step tracker gives the user a sense of the full pipeline.
+	// Each Start() call auto-completes the previous step.
+	steps := ui.NewSteps([]string{
+		"READ FILE",
+		"ENCRYPT",
+		"TRANSMIT",
+		"CONFIRM",
+	})
+
+	// ── Step 1: Read ──
+	steps.Start("READING FILE")
 	data, err := os.ReadFile(filePath)
 	if err != nil {
 		ui.Error(fmt.Sprintf("FAILED_TO_READ_FILE: %s", err))
@@ -48,10 +58,13 @@ func runSend(args []string) {
 	fileName := filepath.Base(filePath)
 	fileSize := int64(len(data))
 
-	ui.FileInfo(fileName, formatSize(fileSize), fmt.Sprintf("%dH", expiryHours))
+	// Show file metadata in a box — this is the first visual "wow" moment.
+	steps.Complete("READ FILE")
+	ui.FileInfoBox(fileName, formatSize(fileSize), fmt.Sprintf("%dH", expiryHours))
+	fmt.Fprintln(os.Stderr)
 
-	// Encrypt
-	ui.Progress("ENCRYPTING: AES-256-GCM...")
+	// ── Step 2: Encrypt ──
+	steps.Start("ENCRYPTING — AES-256-GCM")
 	key, err := crypto.GenerateKey()
 	if err != nil {
 		ui.Error(fmt.Sprintf("KEY_GENERATION_FAILED: %s", err))
@@ -66,8 +79,9 @@ func runSend(args []string) {
 
 	keyString := crypto.ExportKey(key)
 
-	// Init upload
-	ui.Progress("INITIATING_TRANSMISSION...")
+	// ── Step 3: Upload ──
+	steps.Start("INITIATING TRANSMISSION")
+
 	baseURL := os.Getenv("PHNTM_API_URL")
 	client := api.New(baseURL)
 
@@ -77,24 +91,34 @@ func runSend(args []string) {
 		os.Exit(1)
 	}
 
-	// Upload to storage
-	ui.Progress("TRANSMITTING: UPLOADING CIPHERTEXT...")
-	if err := client.UploadToStorage(initResp.UploadURL, initResp.Token, ciphertext); err != nil {
+	steps.Complete("INITIATED")
+
+	// Wrap the ciphertext in a ProgressReader so the upload shows a live bar.
+	// bytes.NewReader implements io.Reader; ProgressReader wraps it.
+	ciphertextLen := int64(len(ciphertext))
+	pr := ui.NewProgressReader(bytes.NewReader(ciphertext), ciphertextLen, "TRANSMITTING")
+	if err := client.UploadToStorage(initResp.UploadURL, initResp.Token, pr, ciphertextLen); err != nil {
 		ui.Error(fmt.Sprintf("TRANSMISSION_FAILED: %s", err))
 		os.Exit(1)
 	}
+	pr.Finish()
 
-	// Confirm
+	// ── Step 4: Confirm ──
+	steps.Start("CONFIRMING")
 	if err := client.ConfirmUpload(initResp.ID, fileName, fileSize, expiryHours); err != nil {
 		ui.Error(fmt.Sprintf("CONFIRMATION_FAILED: %s", err))
 		os.Exit(1)
 	}
+	steps.Complete("CONFIRMED")
 
-	// Build share URL
+	// Build share URL and present it — the hero moment.
 	shareURL := fmt.Sprintf("%s/f/%s#%s", client.BaseURL, initResp.ID, keyString)
 
-	ui.Success("TRANSMISSION_COMPLETE")
+	ui.Success(fmt.Sprintf("TRANSMISSION COMPLETE — %s", steps.Elapsed()))
+
+	// Pipe-friendly: bare URL to stdout, decorated box to stderr.
 	ui.URL(shareURL)
+	ui.URLBox(shareURL, fmt.Sprintf("%dh", expiryHours))
 }
 
 func formatSize(bytes int64) string {
