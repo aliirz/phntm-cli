@@ -3,8 +3,21 @@ package ui
 import (
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 )
+
+// ansiRegex matches ANSI escape sequences (CSI sequences like \033[38;2;0;255;209m).
+// We strip these to measure the visible width of a string — ANSI codes are
+// instructions to the terminal, not printable characters.
+var ansiRegex = regexp.MustCompile(`\x1b\[[0-9;]*m`)
+
+// visibleLen returns the length of a string after stripping ANSI escape codes.
+// This is what the user actually sees — the terminal consumes the escapes
+// and only renders the printable characters.
+func visibleLen(s string) int {
+	return len(ansiRegex.ReplaceAllString(s, ""))
+}
 
 // Box renders lines inside a Unicode box-drawing frame.
 // Box-drawing characters (─│┌┐└┘) are part of the "Box Drawing" Unicode
@@ -19,14 +32,16 @@ func Box(lines []string) {
 		return
 	}
 
-	// Find the longest line so we can pad all others to the same width.
-	maxLen := 0
+	// Find the longest *visible* line so we can pad all others to the same width.
+	// We use visibleLen() instead of len() because lines may contain ANSI escape
+	// codes (e.g., color sequences) that are invisible to the user but add bytes.
+	maxVisible := 0
 	for _, line := range lines {
-		if len(line) > maxLen {
-			maxLen = len(line)
+		if vl := visibleLen(line); vl > maxVisible {
+			maxVisible = vl
 		}
 	}
-	width := maxLen + 4 // 2 chars padding on each side
+	width := maxVisible + 4 // 2 chars padding on each side
 
 	// ─ is U+2500 (horizontal line), repeated to fill the width.
 	top := fmt.Sprintf("  %s┌%s┐%s", muted, strings.Repeat("─", width), reset)
@@ -34,8 +49,10 @@ func Box(lines []string) {
 
 	fmt.Fprintf(os.Stderr, "%s\n", top)
 	for _, line := range lines {
-		// Right-pad each line so the closing │ aligns.
-		padded := line + strings.Repeat(" ", maxLen-len(line))
+		// Right-pad using visible length so the closing │ aligns correctly
+		// even when lines contain ANSI codes of different lengths.
+		pad := maxVisible - visibleLen(line)
+		padded := line + strings.Repeat(" ", pad)
 		fmt.Fprintf(os.Stderr, "  %s│%s  %s  %s│%s\n", muted, reset, padded, muted, reset)
 	}
 	fmt.Fprintf(os.Stderr, "%s\n", bot)

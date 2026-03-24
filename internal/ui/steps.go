@@ -47,7 +47,7 @@ func (s *Steps) Start(stepName string) {
 
 	// Complete the previous step if one was running
 	if s.current >= 0 {
-		s.spinner.Stop(fmt.Sprintf("%s", s.steps[s.current]))
+		s.spinner.Stop(s.steps[s.current])
 	}
 
 	s.current++

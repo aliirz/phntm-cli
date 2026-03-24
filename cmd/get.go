@@ -130,11 +130,18 @@ func runGet(args []string) {
 	if outputPath == "." || outputPath == "/" || outputPath == ".." {
 		outputPath = "phntm_download"
 	}
-	// If file already exists, add a suffix
+	// If file already exists, increment a counter until we find a free name.
+	// Handles the case where both report.pdf and report_1.pdf already exist.
 	if _, err := os.Stat(outputPath); err == nil {
 		ext := filepath.Ext(outputPath)
 		base := strings.TrimSuffix(outputPath, ext)
-		outputPath = fmt.Sprintf("%s_phntm%s", base, ext)
+		for i := 1; ; i++ {
+			candidate := fmt.Sprintf("%s_%d%s", base, i, ext)
+			if _, err := os.Stat(candidate); os.IsNotExist(err) {
+				outputPath = candidate
+				break
+			}
+		}
 	}
 
 	if err := os.WriteFile(outputPath, plaintext, 0644); err != nil {
