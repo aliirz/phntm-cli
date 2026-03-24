@@ -52,21 +52,27 @@ func Execute() {
 
 func printUsage() {
 	ui.Banner()
-	fmt.Fprintf(os.Stderr, `%sUSAGE:%s
+
+	// Section headers get the accent color, commands stay default (white).
+	// This creates visual hierarchy without being noisy.
+	c := "\033[38;2;0;255;209m" // cyan accent
+	m := "\033[38;2;85;85;85m"  // muted
+	r := "\033[0m"              // reset
+
+	fmt.Fprintf(os.Stderr, `%sUSAGE%s
   phntm send <file> [--expiry 1h|6h|24h]    Encrypt & upload a file
   phntm get <url>                            Download & decrypt a file
   phntm update                               Check for updates and self-update
   phntm <file>                               Shorthand for send
   phntm version                              Print version
 
-%sEXAMPLES:%s
+%sEXAMPLES%s
   phntm send report.pdf                      Upload with 24h expiry (default)
   phntm send logs.tar.gz --expiry 1h         Upload with 1h expiry
   phntm get https://phntm.sh/f/abc123#key    Download & decrypt
   phntm report.pdf | pbcopy                  Upload & copy link to clipboard
 
-%sCONTACT:%s
-  %sali@aliirz.com                              https://phntm.sh%s
+  %s── ali@aliirz.com · https://phntm.sh ──%s
 
-`, "\033[38;2;0;255;209m", "\033[0m", "\033[38;2;0;255;209m", "\033[0m", "\033[38;2;0;255;209m", "\033[0m", "\033[38;2;85;85;85m", "\033[0m")
+`, c, r, c, r, m, r)
 }

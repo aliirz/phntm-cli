@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"io"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -63,26 +64,54 @@ func runGet(args []string) {
 
 	client := api.New(baseURL)
 
-	// Fetch metadata
-	ui.Status("LOCATING_TRANSMISSION...")
+	steps := ui.NewSteps([]string{
+		"LOCATE",
+		"DOWNLOAD",
+		"DECRYPT",
+		"SAVE",
+	})
+
+	// ── Step 1: Fetch metadata ──
+	steps.Start("LOCATING TRANSMISSION")
 	meta, err := client.GetFileMetadata(fileID)
 	if err != nil {
 		ui.Error(err.Error())
 		os.Exit(1)
 	}
+	steps.Complete("LOCATED")
 
-	ui.FileInfo(meta.FileName, formatSize(meta.FileSize), meta.ExpiresAt)
+	ui.FileInfoBox(meta.FileName, formatSize(meta.FileSize), meta.ExpiresAt)
+	fmt.Fprintln(os.Stderr)
 
-	// Download encrypted blob
-	ui.Progress("DOWNLOADING_CIPHERTEXT...")
-	ciphertext, err := client.DownloadFile(fileID)
+	// ── Step 2: Download with progress ──
+	steps.Start("DOWNLOADING CIPHERTEXT")
+	dlResp, err := client.DownloadFile(fileID)
 	if err != nil {
 		ui.Error(fmt.Sprintf("DOWNLOAD_FAILED: %s", err))
 		os.Exit(1)
 	}
+	defer dlResp.Body.Close()
 
-	// Decrypt
-	ui.Progress("DECRYPTING: AES-256-GCM...")
+	// Wrap the response body with a progress reader.
+	// ContentLength comes from the HTTP Content-Length header.
+	// If the server doesn't send it (-1), the bar won't show percentage
+	// but the download still works.
+	pr := ui.NewProgressReader(dlResp.Body, dlResp.ContentLength, "DOWNLOADING")
+
+	const maxDownloadSize = 5 << 30 // 5 GB
+	ciphertext, err := io.ReadAll(io.LimitReader(pr, maxDownloadSize+1))
+	if err != nil {
+		ui.Error(fmt.Sprintf("DOWNLOAD_FAILED: %s", err))
+		os.Exit(1)
+	}
+	if int64(len(ciphertext)) > maxDownloadSize {
+		ui.Error("file exceeds maximum size of 5GB")
+		os.Exit(1)
+	}
+	pr.Finish()
+
+	// ── Step 3: Decrypt ──
+	steps.Start("DECRYPTING — AES-256-GCM")
 	key, err := crypto.ImportKey(keyString)
 	if err != nil {
 		ui.Error(fmt.Sprintf("INVALID_KEY: %s", err))
@@ -95,24 +124,31 @@ func runGet(args []string) {
 		os.Exit(1)
 	}
 
-	// Determine output path
+	// ── Step 4: Save to disk ──
+	steps.Start("SAVING")
 	outputPath := filepath.Base(meta.FileName)
-	if outputPath == "." || outputPath == "/" || outputPath ==
-		".." {
+	if outputPath == "." || outputPath == "/" || outputPath == ".." {
 		outputPath = "phntm_download"
 	}
-	// If file already exists, add a suffix
+	// If file already exists, increment a counter until we find a free name.
+	// Handles the case where both report.pdf and report_1.pdf already exist.
 	if _, err := os.Stat(outputPath); err == nil {
 		ext := filepath.Ext(outputPath)
 		base := strings.TrimSuffix(outputPath, ext)
-		outputPath = fmt.Sprintf("%s_phntm%s", base, ext)
+		for i := 1; ; i++ {
+			candidate := fmt.Sprintf("%s_%d%s", base, i, ext)
+			if _, err := os.Stat(candidate); os.IsNotExist(err) {
+				outputPath = candidate
+				break
+			}
+		}
 	}
 
-	// Write to disk
 	if err := os.WriteFile(outputPath, plaintext, 0644); err != nil {
 		ui.Error(fmt.Sprintf("WRITE_FAILED: %s", err))
 		os.Exit(1)
 	}
+	steps.Complete("SAVED")
 
-	ui.Success(fmt.Sprintf("DECRYPTION_COMPLETE: %s", outputPath))
+	ui.Success(fmt.Sprintf("DECRYPTION COMPLETE — %s → %s", steps.Elapsed(), outputPath))
 }

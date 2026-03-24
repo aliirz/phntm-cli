@@ -72,11 +72,15 @@ func (c *Client) InitUpload(fileName string, fileSize int64, expiryHours int) (*
 }
 
 // UploadToStorage uploads encrypted data directly to Supabase Storage via presigned URL.
-func (c *Client) UploadToStorage(uploadURL string, token string, data []byte) error {
-	req, err := http.NewRequest("PUT", uploadURL, bytes.NewReader(data))
+// The body parameter is an io.Reader — this lets callers wrap it with a progress
+// tracker (e.g., ui.ProgressReader) without changing this function's internals.
+// contentLength is needed because HTTP PUT with presigned URLs requires Content-Length.
+func (c *Client) UploadToStorage(uploadURL string, token string, body io.Reader, contentLength int64) error {
+	req, err := http.NewRequest("PUT", uploadURL, body)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
+	req.ContentLength = contentLength
 	req.Header.Set("Content-Type", "application/octet-stream")
 	req.Header.Set("Authorization", "Bearer "+token)
 
@@ -144,30 +148,33 @@ func (c *Client) GetFileMetadata(id string) (*FileMetadata, error) {
 	return &meta, nil
 }
 
-// DownloadFile downloads the encrypted blob from the server.
-func (c *Client) DownloadFile(id string) ([]byte, error) {
+// DownloadResponse holds the download stream and its size, allowing
+// callers to wrap the body with a progress reader before consuming it.
+type DownloadResponse struct {
+	Body          io.ReadCloser
+	ContentLength int64
+}
+
+// DownloadFile starts downloading the encrypted blob from the server.
+// It returns a DownloadResponse so the caller can wrap Body with a progress
+// reader. The caller is responsible for closing Body.
+func (c *Client) DownloadFile(id string) (*DownloadResponse, error) {
 	resp, err := c.HTTPClient.Get(c.BaseURL + "/api/download/" + id)
 	if err != nil {
 		return nil, fmt.Errorf("download request failed: %w", err)
 	}
-	defer resp.Body.Close()
 
 	if resp.StatusCode == 410 {
+		resp.Body.Close()
 		return nil, fmt.Errorf("TRANSMISSION_EXPIRED: DATA PURGED")
 	}
 	if resp.StatusCode != 200 {
+		resp.Body.Close()
 		return nil, fmt.Errorf("download failed (HTTP %d)", resp.StatusCode)
 	}
 
-	const maxDownloadSize = 5 << 30 // 5 GB
-	data, err := io.ReadAll(io.LimitReader(resp.Body, maxDownloadSize+1))
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w",
-			err)
-	}
-	if int64(len(data)) > maxDownloadSize {
-		return nil, fmt.Errorf("file exceeds maximum size of 5GB")
-	}
-
-	return data, nil
+	return &DownloadResponse{
+		Body:          resp.Body,
+		ContentLength: resp.ContentLength,
+	}, nil
 }
