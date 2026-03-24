@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 )
 
 const DefaultBaseURL = "https://phntm.sh"
@@ -21,7 +22,7 @@ func New(baseURL string) *Client {
 	}
 	return &Client{
 		BaseURL:    baseURL,
-		HTTPClient: &http.Client{},
+		HTTPClient: &http.Client{Timeout: 30 * time.Second},
 	}
 }
 
@@ -43,11 +44,14 @@ type FileMetadata struct {
 
 // InitUpload requests a presigned upload URL from the server.
 func (c *Client) InitUpload(fileName string, fileSize int64, expiryHours int) (*InitUploadResponse, error) {
-	body, _ := json.Marshal(map[string]interface{}{
+	body, err := json.Marshal(map[string]interface{}{
 		"file_name":    fileName,
 		"file_size":    fileSize,
 		"expiry_hours": expiryHours,
 	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal body: %w", err)
+	}
 
 	resp, err := c.HTTPClient.Post(c.BaseURL+"/api/upload", "application/json", bytes.NewReader(body))
 	if err != nil {
@@ -56,8 +60,7 @@ func (c *Client) InitUpload(fileName string, fileSize int64, expiryHours int) (*
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
-		respBody, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("upload init failed (HTTP %d): %s", resp.StatusCode, string(respBody))
+		return nil, fmt.Errorf("upload init failed (HTTP %d)", resp.StatusCode)
 	}
 
 	var result InitUploadResponse
@@ -84,8 +87,7 @@ func (c *Client) UploadToStorage(uploadURL string, token string, data []byte) er
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		respBody, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("storage upload failed (HTTP %d): %s", resp.StatusCode, string(respBody))
+		return fmt.Errorf("storage upload failed (HTTP %d)", resp.StatusCode)
 	}
 
 	return nil
@@ -93,12 +95,15 @@ func (c *Client) UploadToStorage(uploadURL string, token string, data []byte) er
 
 // ConfirmUpload creates the DB record after a successful storage upload.
 func (c *Client) ConfirmUpload(id, fileName string, fileSize int64, expiryHours int) error {
-	body, _ := json.Marshal(map[string]interface{}{
+	body, err := json.Marshal(map[string]interface{}{
 		"id":           id,
 		"file_name":    fileName,
 		"file_size":    fileSize,
 		"expiry_hours": expiryHours,
 	})
+	if err != nil {
+		return fmt.Errorf("failed to marshal body: %w", err)
+	}
 
 	resp, err := c.HTTPClient.Post(c.BaseURL+"/api/upload/confirm", "application/json", bytes.NewReader(body))
 	if err != nil {
@@ -107,8 +112,7 @@ func (c *Client) ConfirmUpload(id, fileName string, fileSize int64, expiryHours 
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
-		respBody, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("confirm failed (HTTP %d): %s", resp.StatusCode, string(respBody))
+		return fmt.Errorf("confirm failed (HTTP %d)", resp.StatusCode)
 	}
 
 	return nil
@@ -155,9 +159,14 @@ func (c *Client) DownloadFile(id string) ([]byte, error) {
 		return nil, fmt.Errorf("download failed (HTTP %d)", resp.StatusCode)
 	}
 
-	data, err := io.ReadAll(resp.Body)
+	const maxDownloadSize = 5 << 30 // 5 GB
+	data, err := io.ReadAll(io.LimitReader(resp.Body, maxDownloadSize+1))
 	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
+		return nil, fmt.Errorf("failed to read response: %w",
+			err)
+	}
+	if int64(len(data)) > maxDownloadSize {
+		return nil, fmt.Errorf("file exceeds maximum size of 5GB")
 	}
 
 	return data, nil

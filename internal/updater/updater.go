@@ -1,23 +1,27 @@
 package updater
 
 import (
+	"archive/tar"
+	"bufio"
+	"compress/gzip"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"runtime"
+	"runtime"                                              
 	"strings"
-	"time"
+	"time"  
 
 	"github.com/aliirz/phntm-cli/internal/ui"
 )
 
 const (
-	repo         = "aliirz/phntm-cli"
-	checkFile    = ".last_update_check"
+	repo          = "aliirz/phntm-cli"
+	checkFile     = ".last_update_check"
 	checkInterval = 24 * time.Hour
 )
 
@@ -83,7 +87,7 @@ func CheckForUpdateQuietly(currentVersion string) {
 			return
 		}
 		// Cache the result
-		os.WriteFile(checkPath, []byte(latest), 0644)
+		os.WriteFile(checkPath, []byte(latest), 0600)
 
 		if latest != "v"+currentVersion && latest != currentVersion {
 			ui.UpdateHint(latest)
@@ -159,10 +163,17 @@ func RunUpdate(currentVersion string) {
 	io.Copy(out, resp.Body)
 	out.Close()
 
-	// Extract
+	// Verify SHA256 checksum before extracting
+	ui.Progress("VERIFYING_CHECKSUM...")
+	checksumURL := fmt.Sprintf("https://github.com/%s/releases/download/%s/checksums.txt", repo, latest)
+	if err := verifyChecksum(tarPath, tarball, checksumURL); err != nil {
+		ui.Error(fmt.Sprintf("CHECKSUM_FAILED: %s", err))
+		os.Exit(1)
+	}
+
+	// Extract with safe tar handling
 	ui.Progress("EXTRACTING...")
-	cmd := exec.Command("tar", "-xzf", tarPath, "-C", tmpDir)
-	if err := cmd.Run(); err != nil {
+	if err := extractTarGz(tarPath, tmpDir); err != nil {
 		ui.Error(fmt.Sprintf("EXTRACT_FAILED: %s", err))
 		os.Exit(1)
 	}
@@ -191,6 +202,15 @@ func RunUpdate(currentVersion string) {
 }
 
 func replaceBinary(dest, src string) error {
+	// Guard: ensure dest is a regular file, not a symlink
+	destInfo, err := os.Lstat(dest)
+	if err != nil {
+		return fmt.Errorf("cannot stat %s: %w", dest, err)
+	}
+	if destInfo.Mode()&os.ModeSymlink != 0 {
+		return fmt.Errorf("refusing to replace symlink at %s", dest)
+	}
+
 	srcFile, err := os.Open(src)
 	if err != nil {
 		return err
@@ -201,8 +221,9 @@ func replaceBinary(dest, src string) error {
 	destFile, err := os.OpenFile(dest, os.O_WRONLY|os.O_TRUNC, 0755)
 	if err != nil {
 		// If permission denied, try with temp file + rename
+		// O_EXCL ensures atomic creation — fails if file already exists (prevents symlink attacks)
 		tmpDest := dest + ".new"
-		destFile, err = os.Create(tmpDest)
+		destFile, err = os.OpenFile(tmpDest, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0755)
 		if err != nil {
 			return fmt.Errorf("cannot write to %s: %w", dest, err)
 		}
@@ -212,7 +233,6 @@ func replaceBinary(dest, src string) error {
 			return err
 		}
 		destFile.Close()
-		os.Chmod(tmpDest, 0755)
 		return os.Rename(tmpDest, dest)
 	}
 
@@ -223,3 +243,103 @@ func replaceBinary(dest, src string) error {
 	destFile.Close()
 	return os.Chmod(dest, 0755)
 }
+
+func verifyChecksum(filePath, fileName, checksumURL string) error {
+	// Download checksums.txt from the release
+	resp, err := http.Get(checksumURL)
+	if err != nil {
+		return fmt.Errorf("failed to fetch checksums: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return fmt.Errorf("checksums not available (HTTP %d)", resp.StatusCode)
+	}
+
+	// Find the expected hash for our tarball
+	var expectedHash string
+	scanner := bufio.NewScanner(resp.Body)
+	for scanner.Scan() {
+		// Format: "sha256hash  filename"
+		parts := strings.Fields(scanner.Text())
+		if len(parts) == 2 && parts[1] == fileName {
+			expectedHash = parts[0]
+			break
+		}
+	}
+	if expectedHash == "" {
+		return fmt.Errorf("no checksum found for %s", fileName)
+	}
+
+	// Compute SHA256 of the downloaded file
+	f, err := os.Open(filePath)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return fmt.Errorf("failed to hash file: %w", err)
+	}
+	actualHash := hex.EncodeToString(h.Sum(nil))
+
+	if actualHash != expectedHash {
+		return fmt.Errorf("hash mismatch: expected %s, got %s", expectedHash, actualHash)
+	}
+
+	return nil
+}
+
+func extractTarGz(tarPath, destDir string) error {
+	f, err := os.Open(tarPath)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	gz, err := gzip.NewReader(f)
+	if err != nil {
+		return fmt.Errorf("gzip error: %w", err)
+	}
+	defer gz.Close()
+
+	tr := tar.NewReader(gz)
+	for {
+		header, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return fmt.Errorf("tar error: %w", err)
+		}
+
+		// Sanitize: use only the base name, reject paths with ..
+		clean := filepath.Clean(header.Name)
+		if strings.Contains(clean, "..") {
+			return fmt.Errorf("unsafe path in tar: %s", header.Name)
+		}
+
+		target := filepath.Join(destDir, filepath.Base(clean))
+
+		switch header.Typeflag {
+		case tar.TypeReg:
+			out, err := os.OpenFile(target, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, os.FileMode(header.Mode)&0755)
+			if err != nil {
+				return err
+			}
+			if _, err := io.Copy(out, tr); err != nil {
+				out.Close()
+				return err
+			}
+			out.Close()
+		case tar.TypeDir:
+			// skip directories — we only need the binary
+			continue
+		case tar.TypeSymlink, tar.TypeLink:
+			// reject symlinks entirely — known attack vector
+			return fmt.Errorf("unsafe entry in tar: symlink %s", header.Name)
+		}
+	}
+	return nil
+}                                   

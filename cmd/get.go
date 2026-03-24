@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/aliirz/phntm-cli/internal/api"
@@ -28,6 +29,11 @@ func runGet(args []string) {
 		os.Exit(1)
 	}
 
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		ui.Error("INVALID_URL: URL must start with http or https")
+		os.Exit(1)
+	}
+
 	// Extract file ID from path: /f/{id}
 	pathParts := strings.Split(strings.TrimPrefix(parsed.Path, "/"), "/")
 	if len(pathParts) < 2 || pathParts[0] != "f" {
@@ -35,6 +41,11 @@ func runGet(args []string) {
 		os.Exit(1)
 	}
 	fileID := pathParts[1]
+	matched, _ := regexp.MatchString("^[a-zA-Z0-9]+$", fileID)
+	if !matched {
+		ui.Error("INVALID_FILE_ID: file ID must be alphanumeric")
+		os.Exit(1)
+	}
 
 	// Extract key from fragment
 	keyString := parsed.Fragment
@@ -85,7 +96,11 @@ func runGet(args []string) {
 	}
 
 	// Determine output path
-	outputPath := meta.FileName
+	outputPath := filepath.Base(meta.FileName)
+	if outputPath == "." || outputPath == "/" || outputPath ==
+		".." {
+		outputPath = "phntm_download"
+	}
 	// If file already exists, add a suffix
 	if _, err := os.Stat(outputPath); err == nil {
 		ext := filepath.Ext(outputPath)
