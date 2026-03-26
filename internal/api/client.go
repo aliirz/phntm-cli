@@ -53,7 +53,14 @@ func (c *Client) InitUpload(fileName string, fileSize int64, expiryHours int) (*
 		return nil, fmt.Errorf("failed to marshal body: %w", err)
 	}
 
-	resp, err := c.HTTPClient.Post(c.BaseURL+"/api/upload", "application/json", bytes.NewReader(body))
+	req, err := http.NewRequest("POST", c.BaseURL+"/api/upload", bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Phntm-Client", "cli")
+
+	resp, err := c.HTTPClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("request failed: %w", err)
 	}
@@ -109,7 +116,14 @@ func (c *Client) ConfirmUpload(id, fileName string, fileSize int64, expiryHours 
 		return fmt.Errorf("failed to marshal body: %w", err)
 	}
 
-	resp, err := c.HTTPClient.Post(c.BaseURL+"/api/upload/confirm", "application/json", bytes.NewReader(body))
+	req, err := http.NewRequest("POST", c.BaseURL+"/api/upload/confirm", bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Phntm-Client", "cli")
+
+	resp, err := c.HTTPClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("confirm request failed: %w", err)
 	}

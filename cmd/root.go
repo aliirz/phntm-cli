@@ -10,7 +10,7 @@ import (
 	"github.com/aliirz/phntm-cli/internal/updater"
 )
 
-var version = "0.1.1"
+var version = "0.1.2"
 
 func Execute() {
 	if len(os.Args) < 2 {
