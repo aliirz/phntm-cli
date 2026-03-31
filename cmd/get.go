@@ -118,7 +118,8 @@ func runGet(args []string) {
 		os.Exit(1)
 	}
 
-	plaintext, err := crypto.DecryptFile(ciphertext, key)
+	// Auto-detect format (streaming or legacy)
+	plaintext, err := crypto.DecryptAuto(ciphertext, key)
 	if err != nil {
 		ui.Error(fmt.Sprintf("DECRYPTION_FAILED: %s", err))
 		os.Exit(1)

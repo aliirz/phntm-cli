@@ -64,14 +64,15 @@ func runSend(args []string) {
 	fmt.Fprintln(os.Stderr)
 
 	// ── Step 2: Encrypt ──
-	steps.Start("ENCRYPTING — AES-256-GCM")
+	steps.Start("ENCRYPTING — AES-256-GCM STREAMING")
 	key, err := crypto.GenerateKey()
 	if err != nil {
 		ui.Error(fmt.Sprintf("KEY_GENERATION_FAILED: %s", err))
 		os.Exit(1)
 	}
 
-	ciphertext, err := crypto.EncryptFile(data, key)
+	// Use streaming encryption for memory efficiency
+	ciphertext, err := crypto.EncryptStream(data, key)
 	if err != nil {
 		ui.Error(fmt.Sprintf("ENCRYPTION_FAILED: %s", err))
 		os.Exit(1)
