@@ -28,7 +28,10 @@ Hand-rolled CLI (no cobra/urfave) — command dispatch is in `cmd/root.go` via a
 
 - **`cmd/`** — CLI entry points: `send` (encrypt + upload), `get` (download + decrypt), `update` (self-update). The root also handles bare file args as implicit `send`.
 - **`internal/api/`** — HTTP client for the phntm.sh API. Three-step upload flow: init (get presigned URL) → upload to storage → confirm. Download fetches metadata then blob.
-- **`internal/crypto/`** — AES-256-GCM encrypt/decrypt. Wire format is `[12-byte IV][ciphertext+tag]`. Keys are base64url-encoded (no padding) for URL fragment compatibility with the web app.
+- **`internal/crypto/`** — AES-256-GCM encryption. Two formats supported:
+  - **Streaming** (default): Rogaway's STREAM construction with 64KB chunks. Wire format: `[PHNT magic][header][chunk_0_nonce][chunk_0_ciphertext]...[chunk_n_nonce][chunk_n_ciphertext]`
+  - **Legacy**: Single-block `[12-byte IV][ciphertext+tag]` for backward compatibility.
+  - `DecryptAuto()` auto-detects format.
 - **`internal/ui/`** — Terminal output with ANSI colors. All decorative output goes to stderr; only the share URL goes to stdout, making the CLI pipe-friendly (`phntm file.pdf | pbcopy`).
 - **`internal/updater/`** — Self-update via GitHub Releases. Background version check (cached daily in `~/.config/phntm/`), interactive update with binary replacement.
 
@@ -36,7 +39,8 @@ Hand-rolled CLI (no cobra/urfave) — command dispatch is in `cmd/root.go` via a
 
 - **Pipe-friendly**: `ui.IsPiped()` detects non-TTY stdout and suppresses all decoration. Only the bare URL is printed to stdout.
 - **No dependencies**: The entire CLI is stdlib-only Go — no CLI framework, no third-party HTTP client.
-- **Web-compatible crypto**: The encryption format (IV prefix, base64url keys) is intentionally compatible with the phntm.sh web app's WebCrypto implementation.
+- **Web-compatible crypto**: The encryption formats (streaming and legacy) are intentionally compatible with the phntm.sh web app's WebCrypto implementation. Both use AES-256-GCM with base64url-encoded keys.
+- **Streaming encryption**: Large files are encrypted in 64KB chunks using Rogaway's STREAM construction. This prevents memory exhaustion on large uploads.
 
 ## Environment Variables
 

@@ -33,13 +33,24 @@ phntm report.pdf | pbcopy
 
 ## How it works
 
-1. **Encrypt** — AES-256-GCM encryption happens locally on your machine
+1. **Encrypt** — AES-256-GCM encryption happens locally on your machine. Large files use streaming encryption (64KB chunks) for memory efficiency.
 2. **Upload** — Only ciphertext is transmitted to the server
 3. **Share** — You get a URL with the decryption key in the `#fragment` (never sent to server)
 4. **Download** — Recipient downloads ciphertext, decrypts locally
 5. **Expire** — Files self-destruct after 1, 6, or 24 hours
 
 The encryption key only exists in the URL fragment. Browsers and HTTP clients never send fragments to servers. Not even phntm.sh can read your files.
+
+### Wire Format (Streaming)
+
+Large files use Rogaway's STREAM construction:
+
+```
+[PHNT magic][version][chunk_size][total_chunks][base_nonce]
+[nonce_0][ciphertext_0][tag_0]...[nonce_n][ciphertext_n][tag_n]
+```
+
+Each chunk has a unique nonce derived from a base nonce using a counter + last-block flag. This provides truncation resistance and proven security (nOBE).
 
 ## Environment Variables
 
