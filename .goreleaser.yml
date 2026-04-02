@@ -17,6 +17,18 @@ builds:
     ldflags:
       - -s -w -X github.com/aliirz/phntm-cli/cmd.version={{.Version}}
 
+dockers:
+  - image_templates:
+      - "aliirz/phntm:{{ .Version }}"
+      - "aliirz/phntm:latest"
+    dockerfile: Dockerfile
+    build_flag_templates:
+      - "--pull"
+      - "--label=org.opencontainers.image.created={{.Date}}"
+      - "--label=org.opencontainers.image.title={{.ProjectName}}"
+      - "--label=org.opencontainers.image.revision={{.FullCommit}}"
+      - "--label=org.opencontainers.image.version={{.Version}}"
+
 archives:
   - format: tar.gz
     name_template: "phntm_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
