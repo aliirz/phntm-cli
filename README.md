@@ -7,7 +7,15 @@ Zero-knowledge, end-to-end encrypted. Your files are encrypted locally before th
 ## Install
 
 ```sh
+# Quick install (macOS, Linux, Windows)
 curl -sL https://phntm.sh/install | sh
+
+# Or via Homebrew
+brew tap aliirz/phntm
+brew install phntm
+
+# Or via npm
+npm install -g @aliirz/phntm
 ```
 
 Pre-built binaries for macOS (Intel & Apple Silicon), Linux (amd64 & arm64), and Windows.
