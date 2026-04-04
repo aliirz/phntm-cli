@@ -92,3 +92,18 @@ func FileInfoBox(name string, size string, expiry string) {
 	fmt.Fprintln(os.Stderr)
 	Box(lines)
 }
+
+// NoteInfoBox renders note metadata in a structured box.
+func NoteInfoBox(charCount int, expiry string) {
+	if IsPiped() {
+		return
+	}
+
+	lines := []string{
+		fmt.Sprintf("%sNOTE%s   %d characters", muted, reset, charCount),
+		fmt.Sprintf("%sEXPIRY%s %s", muted, reset, expiry),
+	}
+
+	fmt.Fprintln(os.Stderr)
+	Box(lines)
+}

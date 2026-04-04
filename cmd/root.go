@@ -32,6 +32,8 @@ func Execute() {
 		runSend(os.Args[2:])
 	case "get":
 		runGet(os.Args[2:])
+	case "note":
+		runNote(os.Args[2:])
 	case "update":
 		updater.RunUpdate(version)
 	case "version", "--version", "-v":
@@ -62,6 +64,7 @@ func printUsage() {
 	fmt.Fprintf(os.Stderr, `%sUSAGE%s
   phntm send <file> [--expiry 1h|6h|24h]    Encrypt & upload a file
   phntm get <url>                            Download & decrypt a file
+  phntm note <text> [--expiry 1h|6h|24h]    Encrypt & upload a text note
   phntm update                               Check for updates and self-update
   phntm <file>                               Shorthand for send
   phntm version                              Print version
@@ -71,6 +74,8 @@ func printUsage() {
   phntm send logs.tar.gz --expiry 1h         Upload with 1h expiry
   phntm get https://phntm.sh/f/abc123#key    Download & decrypt
   phntm report.pdf | pbcopy                  Upload & copy link to clipboard
+  phntm note "API key: sk-123"               Upload a text note
+  echo "secret" | phntm note                 Pipe text to upload
 
   %s── ali@aliirz.com · https://phntm.sh ──%s
 
