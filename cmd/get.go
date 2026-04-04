@@ -151,5 +151,12 @@ func runGet(args []string) {
 	}
 	steps.Complete("SAVED")
 
+	// ── Step 5: If .txt file, print to stdout ──
+	isNote := strings.HasSuffix(strings.ToLower(meta.FileName), ".txt")
+	if isNote {
+		ui.NoteContentBox(len(plaintext), string(plaintext))
+		fmt.Fprintln(os.Stderr)
+	}
+
 	ui.Success(fmt.Sprintf("DECRYPTION COMPLETE — %s → %s", steps.Elapsed(), outputPath))
 }

@@ -107,3 +107,30 @@ func NoteInfoBox(charCount int, expiry string) {
 	fmt.Fprintln(os.Stderr)
 	Box(lines)
 }
+
+// NoteContentBox renders note content in a structured box.
+// When stdout is piped by user (e.g., phntm get url | pbcopy), outputs bare content.
+// Otherwise, shows formatted box to stderr.
+func NoteContentBox(charCount int, content string) {
+	if IsPiped() {
+		// User is piping — output bare content to stdout
+		fmt.Print(content)
+		return
+	}
+
+	// Truncate content if too long for display
+	maxDisplay := 500
+	displayContent := content
+	if len(content) > maxDisplay {
+		displayContent = content[:maxDisplay] + "..."
+	}
+
+	lines := []string{
+		fmt.Sprintf("%sNOTE%s   %d characters", muted, reset, charCount),
+		"",
+		displayContent,
+	}
+
+	fmt.Fprintln(os.Stderr)
+	Box(lines)
+}
