@@ -29,6 +29,10 @@ phntm send report.pdf
 # Upload with custom expiry
 phntm send secrets.tar.gz --expiry 1h
 
+# Share a text note
+phntm note "API key: sk-abc123"
+echo "password" | phntm note
+
 # Download & decrypt
 phntm get https://phntm.sh/f/abc123#key
 
@@ -38,6 +42,27 @@ phntm report.pdf
 # Pipe-friendly — outputs just the URL
 phntm report.pdf | pbcopy
 ```
+
+### Notes
+
+The `phntm note` command encrypts and shares text (passwords, credentials, snippets):
+
+```sh
+# Direct input
+phntm note "WiFi password: Guest123" --expiry 1h
+
+# Pipe from stdin
+cat secrets.txt | phntm note
+
+# Retrieve and view inline
+phntm get https://phntm.sh/f/abc#key
+# Notes render inline in terminal + save to disk
+
+# Pipe to clipboard
+phntm get https://phntm.sh/f/abc#key | pbcopy
+```
+
+Notes are stored as `note.txt` with a 10KB limit. Same encryption as files.
 
 ## How it works
 
